@@ -1,0 +1,41 @@
+name: Publish existing release artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful Release workflow run containing the artifacts
+        required: true
+      tag:
+        description: Existing draft release tag
+        required: true
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.run_id }}
+          pattern: release-*
+          merge-multiple: true
+          path: dist
+
+      - name: Upload artifacts and publish the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          mapfile -d '' files < <(find dist -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*-source.tar.gz' \) -print0)
+          if [ "${#files[@]}" -ne 3 ]; then
+            echo 'Expected a macOS DMG, Windows ZIP and Mihomo source archive'
+            exit 1
+          fi
+          gh release upload "$TAG" "${files[@]}" --clobber
+          gh release edit "$TAG" --draft=false --latest
