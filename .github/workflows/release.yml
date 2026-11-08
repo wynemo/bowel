@@ -1,8 +1,9 @@
-# Pushing a tag such as v0.1.0 builds, signs and notarizes the disk image and
-# publishes it as a GitHub release. The tag must match the version in mygo.json.
+# Pushing a tag such as v0.1.0 builds a signed, notarized macOS disk image
+# and a Windows amd64 ZIP, then publishes both as one GitHub release.
+# The tag must match the version in mygo.json.
 #
-# Running this workflow by hand builds with an ad hoc signature and publishes
-# nothing, which checks that the app still builds on the runner.
+# Running this workflow by hand builds both platforms (macOS with an ad hoc
+# signature) and uploads workflow artifacts without publishing a release.
 name: Release
 
 on:
@@ -14,11 +15,9 @@ permissions:
   contents: read
 
 jobs:
-  release:
+  macos:
     # Compiling the Icon Composer app icon needs Xcode 26 or later.
     runs-on: macos-26
-    permissions:
-      contents: write
     env:
       PUBLISH: ${{ github.event_name == 'push' }}
     steps:
@@ -55,6 +54,8 @@ jobs:
       - name: Fetch the mihomo core and geo data
         env:
           GH_TOKEN: ${{ github.token }}
+          GOOS: darwin
+          GOARCH: arm64
           MIHOMO_SOURCE_DIR: dist
         run: ./scripts/fetch-core.sh
 
@@ -87,13 +88,86 @@ jobs:
           ./scripts/release.sh
           rm "$NOTARY_KEY"
 
-      - name: Publish the release
-        if: env.PUBLISH == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" build/darwin-arm64/bowel-*-arm64.dmg dist/mihomo-*-source.tar.gz --verify-tag --generate-notes --title "bowel $TAG"
-
       - name: Build without publishing
         if: env.PUBLISH != 'true'
         run: go tool mygo build -platform darwin/arm64 -skip-notarize -sign - .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: |
+            build/darwin-arm64/bowel-*-arm64.dmg
+            dist/mihomo-*-source.tar.gz
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Check the tag
+        if: github.event_name == 'push'
+        env:
+          TAG: ${{ github.ref_name }}
+        shell: pwsh
+        run: |
+          $version = (Get-Content mygo.json -Raw | ConvertFrom-Json).version
+          if ($env:TAG -ne "v$version") {
+            throw "Tag $env:TAG does not match version $version in mygo.json"
+          }
+
+      - name: Fetch the Windows mihomo core and geo data
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GOOS: windows
+          GOARCH: amd64
+        run: ./scripts/fetch-core.sh
+
+      - name: Build Windows amd64
+        run: go tool mygo build -platform windows/amd64 -skip-installer .
+
+      - name: Check the bundled core and package the app
+        shell: pwsh
+        run: |
+          $core = 'build/windows-amd64/bin/mihomo.exe'
+          if (!(Test-Path $core)) {
+            throw "Windows mihomo binary missing: $core"
+          }
+          & $core -v
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The bundled mihomo core could not run on Windows'
+          }
+          $version = (Get-Content mygo.json -Raw | ConvertFrom-Json).version
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path build/windows-amd64/* -DestinationPath "dist/bowel-$version-windows-amd64.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: dist/bowel-*-windows-amd64.zip
+          if-no-files-found: error
+
+  publish:
+    needs: [macos, windows]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: dist
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" dist/*.dmg dist/*.zip dist/mihomo-*-source.tar.gz --verify-tag --generate-notes --title "bowel $TAG"
