@@ -5,6 +5,8 @@
 # Running this workflow by hand builds everything and publishes nothing: the
 # files stay on the run as artifacts, with an ad hoc signature on macOS and the
 # debug key on Android, which checks that all of it still builds on the runners.
+# Pushing main runs the checks and builds the same downloadable artifacts,
+# except for iOS and Docker, without publishing a release.
 #
 # A tag needs these repository secrets:
 #   MACOS_CERTIFICATE_P12        Developer ID certificate, base64
@@ -50,6 +52,7 @@ name: Release
 
 on:
   push:
+    branches: [main]
     tags: ["v*"]
   workflow_dispatch:
 
@@ -57,7 +60,7 @@ permissions:
   contents: read
 
 env:
-  PUBLISH: ${{ github.event_name == 'push' }}
+  PUBLISH: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
   FLUTTER_VERSION: 3.47.9
 
 jobs:
@@ -67,6 +70,18 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        env:
+          CGO_ENABLED: "0"
+        run: go test ./...
+
+      - name: Check MyGo UI lifetimes
+        run: go tool mygo vet .
 
       - id: version
         run: echo "version=$(jq -r .version mygo.json)" >> "$GITHUB_OUTPUT"
@@ -362,7 +377,7 @@ jobs:
           path: mobile/flutter/bowel-*-ios-unsigned.ipa
 
   publish:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [check, macos, desktop, android]
     runs-on: ubuntu-latest
     permissions:
