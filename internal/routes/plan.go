@@ -594,11 +594,19 @@ func (p Plan) Locked(id string) bool {
 	return false
 }
 
-// PickNode pins group id to node; "" goes back to the fastest.
+// PickNode keeps backup order when selecting a member, adding a new node
+// at the end if needed. Other strategies pin to node; "" returns to fastest.
+// The caller selects the fallback member through the core controller.
 func (p *Plan) PickNode(id, node string) {
 	p.ChangePolicy(id, func(q *Policy) {
 		if node == "" {
 			q.Mode = ModeAuto
+			return
+		}
+		if q.Mode == ModeOrder {
+			if !slices.Contains(q.Order, node) {
+				q.Order = append(slices.Clone(q.Order), node)
+			}
 			return
 		}
 		q.Mode, q.Fixed = ModeFixed, node

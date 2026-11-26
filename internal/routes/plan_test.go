@@ -188,7 +188,7 @@ func TestCustomGroups(t *testing.T) {
 }
 
 // TestStrategiesKeepTheirSettings: switching strategy loses nothing, and
-// picking a node under any strategy fixes on it.
+// picking a node under automatic selection fixes on it.
 func TestStrategiesKeepTheirSettings(t *testing.T) {
 	var p Plan
 	p.ChangePolicy("ai", func(q *Policy) {
@@ -204,6 +204,38 @@ func TestStrategiesKeepTheirSettings(t *testing.T) {
 	q = p.Policy("ai")
 	if q.Mode != ModeFixed || q.Fixed != "n" || !slices.Equal(q.Regions, []string{"JP"}) {
 		t.Errorf("picked: %+v", q)
+	}
+}
+
+// A manual fallback pick retains the other backups and never changes to fixed.
+func TestPickNodeWithBackups(t *testing.T) {
+	var p Plan
+	p.ChangePolicy("ai", func(q *Policy) {
+		q.Mode, q.Order, q.Fixed = ModeOrder, []string{"a", "b", "c"}, "old"
+	})
+	for _, tc := range []struct {
+		node string
+		want []string
+	}{
+		{"b", []string{"a", "b", "c"}},
+		{"b", []string{"a", "b", "c"}},
+		{"new", []string{"a", "b", "c", "new"}},
+		{"a", []string{"a", "b", "c", "new"}},
+	} {
+		before := p.Clone()
+		oldOrder := slices.Clone(before.Policy("ai").Order)
+		p.PickNode("ai", tc.node)
+		q := p.Policy("ai")
+		if q.Mode != ModeOrder || q.Fixed != "old" || !slices.Equal(q.Order, tc.want) {
+			t.Fatalf("pick %q: %+v, want %v", tc.node, q, tc.want)
+		}
+		if !slices.Equal(before.Policy("ai").Order, oldOrder) {
+			t.Fatal("pick mutated the previous plan")
+		}
+	}
+	p.PickNode("ai", "")
+	if q := p.Policy("ai"); q.Mode != ModeAuto || len(q.Order) != 4 {
+		t.Fatalf("return to auto: %+v", q)
 	}
 }
 

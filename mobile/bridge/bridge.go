@@ -642,7 +642,8 @@ func (x *bridge) route(id string) (routes.Route, error) {
 	return routes.Route{}, errors.New(i18n.T("没有这条路由", "No such route"))
 }
 
-// selectNode makes a group's strategy that one node, or the fastest for "".
+// selectNode prefers node under backup order, or pins to it otherwise;
+// "" returns to the fastest.
 func (x *bridge) selectNode(ctx context.Context, routeID, node string) error {
 	r, err := x.route(routeID)
 	if err != nil {
@@ -653,6 +654,26 @@ func (x *bridge) selectNode(ctx context.Context, routeID, node string) error {
 			return errors.New(i18n.T("没有这条路由", "No such route"))
 		}
 		return x.selectMember(ctx, routes.Group(r), x.sourceName(node))
+	}
+	if r.Policy.Mode == routes.ModeOrder && node != "" {
+		c, err := x.core()
+		if err != nil {
+			return err
+		}
+		if err := x.change(ctx, func(s *settings.Settings) { s.Routing.PickNode(routeID, node) }); err != nil {
+			return err
+		}
+		_, orders := x.nodeLists(x.routes())
+		i := slices.Index(orders[routeID], node)
+		if i < 0 {
+			return fmt.Errorf(i18n.T("没有这个节点: %s", "No such node: %s"), node)
+		}
+		if err := c.Select(ctx, routes.Backup(r), routes.BackupStep(r, i)); err != nil {
+			return err
+		}
+		_ = x.refresh(ctx)
+		x.push()
+		return nil
 	}
 	return x.change(ctx, func(s *settings.Settings) { s.Routing.PickNode(routeID, node) })
 }

@@ -1584,7 +1584,8 @@ func (a *App) route(id string) routes.Route {
 	return routes.Route{}
 }
 
-// selectNode pins a route group to node; "" sends it back to the fastest.
+// selectNode prefers node under backup order, or pins to it otherwise;
+// "" sends the route group back to the fastest.
 func (a *App) selectNode(routeID, node string) error {
 	r := a.route(routeID)
 	if r.ID == "" || !r.NodeGroups() {
@@ -1601,6 +1602,11 @@ func (a *App) selectNode(routeID, node string) error {
 	err := a.updateSettings(func(s *settings.Settings) { s.Routing.PickNode(routeID, node) })
 	if err != nil {
 		return err
+	}
+	if node != "" && a.route(routeID).Policy.Mode == routes.ModeOrder {
+		if err := a.selectFallback(routeID, node); err != nil {
+			return err
+		}
 	}
 	a.keepMeasured()
 	if node != "" {

@@ -171,7 +171,7 @@ func (a *App) importedView(s settings.Settings, im *core.Imported, px map[string
 	for _, g := range im.Groups {
 		name := core.GroupName(g)
 		p := px[name]
-		gv := GroupView{Name: name, Kind: core.GroupKind(g), Route: byName[name], Rules: im.RulesTo(name), Now: p.Now, Selectable: core.GroupKind(g) == "select", Members: []MemberView{}}
+		gv := GroupView{Name: name, Kind: core.GroupKind(g), Route: byName[name], Rules: im.RulesTo(name), Now: p.Now, Selectable: core.GroupSelectable(g), Members: []MemberView{}}
 		leaf := p.Now
 		for i := 0; i < 16 && px[leaf].Now != ""; i++ {
 			leaf = px[leaf].Now
@@ -368,7 +368,7 @@ func (a *App) selectMember(group, member string) error {
 	if !ok {
 		return errors.New(i18n.T("没有这个路由组", "No such route group"))
 	}
-	if core.GroupKind(g) != "select" {
+	if !core.GroupSelectable(g) {
 		return fmt.Errorf(i18n.T("「%s」的类型是 %s，由内核自己选择", "%s is of the kind %s: the core chooses by itself"), group, core.GroupKind(g))
 	}
 	if member == "" {

@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -171,6 +174,22 @@ func TestStrategiesOnCore(t *testing.T) {
 		t.Errorf("order: node %q, want %q (%+v)", r.Node, jp, r)
 	}
 
+	// A manual pick keeps the fallback selector and all the other backups.
+	if err := a.selectNode("ai", us); err != nil {
+		t.Fatal(err)
+	}
+	a.refresh()
+	px = coreProxies(t, a)
+	if q := a.settings.Get().Routing.Policy("ai"); q.Mode != routes.ModeOrder || !slices.Equal(q.Order, []string{jp, us}) {
+		t.Fatalf("manual fallback: %+v", q)
+	}
+	if px[routes.Group(ai)].Now != routes.Backup(ai) || px[routes.BackupStep(ai, 0)].All[0] != jp || px[routes.BackupStep(ai, 1)].All[0] != us {
+		t.Fatalf("manual fallback config: %+v", px)
+	}
+	if r = routeIn(a.snapshot(), "ai"); r.Node != us {
+		t.Fatalf("manual fallback node: %q, want %q", r.Node, us)
+	}
+
 	// 固定节点, and the choice of strategy reloads nothing.
 	changeRouting(t, a, func(p *routes.Plan) { p.SetStrategy("ai", routes.ModeFixed, us) })
 	if now := coreProxies(t, a)[routes.Group(ai)].Now; now != us {
@@ -191,6 +210,101 @@ func TestStrategiesOnCore(t *testing.T) {
 	if a.core.Status().PID != pid {
 		t.Errorf("the core restarted: %d → %d", pid, a.core.Status().PID)
 	}
+}
+
+// A manual choice overrides backup order until it fails. Recovery leaves
+// the group on its backup, and the recovered node can be chosen again.
+func TestManualFallbackFailureAndRecovery(t *testing.T) {
+	a, _, _ := speedApp(t, nil)
+	var down atomic.Bool
+	proxy := func(fail *atomic.Bool) *httptest.Server {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if fail != nil && fail.Load() {
+				conn, _, err := w.(http.Hijacker).Hijack()
+				if err == nil {
+					_ = conn.Close()
+				}
+				return
+			}
+			upstream, err := net.DialTimeout("tcp", r.Host, time.Second)
+			if err != nil {
+				w.WriteHeader(http.StatusBadGateway)
+				return
+			}
+			defer upstream.Close()
+			conn, rw, err := w.(http.Hijacker).Hijack()
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+			_, _ = rw.WriteString("HTTP/1.1 200 Connection established\r\n\r\n")
+			_ = rw.Flush()
+			go func() { _, _ = io.Copy(upstream, rw); _ = upstream.Close() }()
+			_, _ = io.Copy(conn, upstream)
+		}))
+		t.Cleanup(srv.Close)
+		return srv
+	}
+	first, backup := proxy(&down), proxy(nil)
+	_, p1, _ := net.SplitHostPort(first.Listener.Addr().String())
+	_, p2, _ := net.SplitHostPort(backup.Listener.Addr().String())
+	sub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprintf(w, "proxies:\n  - {name: chosen, type: http, server: 127.0.0.1, port: %s}\n  - {name: spare, type: http, server: 127.0.0.1, port: %s}\n", p1, p2)
+	}))
+	t.Cleanup(sub.Close)
+	if _, err := a.addProvider(context.Background(), sub.URL+"/fallback"); err != nil {
+		t.Fatal(err)
+	}
+	a.refresh()
+	var chosen, spare string
+	for _, n := range a.snapshot().Nodes {
+		switch display(n.Name) {
+		case "chosen":
+			chosen = n.Name
+		case "spare":
+			spare = n.Name
+		}
+	}
+	if chosen == "" || spare == "" {
+		t.Fatal("missing fallback test nodes")
+	}
+	changeRouting(t, a, func(p *routes.Plan) {
+		p.ChangePolicy("ai", func(q *routes.Policy) { q.Mode, q.Order = routes.ModeOrder, []string{spare, chosen} })
+	})
+	if err := a.selectNode("ai", chosen); err != nil {
+		t.Fatal(err)
+	}
+	r := routeOf(t, a, "ai")
+	target := a.settings.Get().TargetsOf("ai")[0].URL
+	check := func(failed bool, want string) {
+		t.Helper()
+		down.Store(failed)
+		if err := a.coreCall(5*time.Second, func(ctx context.Context, c *mihomo.Client) error {
+			for i := range 2 {
+				_, err := c.ProxyDelay(ctx, routes.BackupStep(r, i), target, "", time.Second)
+				if (i == 1 && failed) != (err != nil) {
+					return fmt.Errorf("step %d, failed %v: %v", i, failed, err)
+				}
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		a.refresh()
+		if got := routeIn(a.snapshot(), "ai").Node; got != want {
+			t.Fatalf("failed=%v: got %q, want %q", failed, got, want)
+		}
+		if q := a.settings.Get().Routing.Policy("ai"); q.Mode != routes.ModeOrder || !slices.Equal(q.Order, []string{spare, chosen}) {
+			t.Fatalf("policy changed: %+v", q)
+		}
+	}
+	check(false, chosen)
+	check(true, spare)
+	check(false, spare)
+	if err := a.selectNode("ai", chosen); err != nil {
+		t.Fatal(err)
+	}
+	check(false, chosen)
 }
 
 // TestRoutingStructureOnCore: a custom group gets its own selector, its

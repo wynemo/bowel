@@ -453,3 +453,11 @@ configuration file /tmp/x/config.next.yaml test failed
 		t.Errorf("what is no log line: %q", got)
 	}
 }
+
+func TestGroupSelectable(t *testing.T) {
+	for _, kind := range []string{"select", "fallback", "url-test", "load-balance", "relay"} {
+		if got, want := GroupSelectable(map[string]any{"type": kind}), kind == "select" || kind == "fallback"; got != want {
+			t.Fatalf("%s: selectable %v, want %v", kind, got, want)
+		}
+	}
+}

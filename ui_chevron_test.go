@@ -148,10 +148,10 @@ func TestOrderRowsAlign(t *testing.T) {
 		}
 		return r
 	}
-	head, add := find("备用顺序"), find("点击加入")
+	head, add := find("备用顺序"), find("其他节点 · 点击选择")
 	nameIn, nameOut := find(in.Display), find(out.Display)
 	if !(head.Y < nameIn.Y && nameIn.Y < add.Y && add.Y < nameOut.Y) {
-		t.Fatalf("%s isn't in the order with %s under 点击加入", in.Display, out.Display)
+		t.Fatalf("%s isn't in the order with %s under 其他节点 · 点击选择", in.Display, out.Display)
 	}
 	if nameIn.X != nameOut.X {
 		t.Errorf("names start at %v in the order, %v under it", nameIn.X, nameOut.X)

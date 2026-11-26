@@ -677,6 +677,7 @@ class _GroupPageState extends State<GroupPage> {
       final fixed = g['fixed'] as String? ?? '';
       kids.add(navRow(l, tr('节点', 'Node'), fixed.isEmpty ? tr('未选择', 'None chosen') : _nodeDisplay(app, fixed), onTap: () => _pickFixed(g)));
     } else {
+      kids.add(Text(tr('点击选择节点，故障时按备用顺序自动切换。', 'Tap to choose a node, with automatic failover in order.'), style: l.text(13, color: l.mute, lh: 18)));
       for (final (i, n) in order.indexed) {
         kids.add(hairBottom(
           l,
@@ -684,7 +685,10 @@ class _GroupPageState extends State<GroupPage> {
             constraints: const BoxConstraints(minHeight: 48),
             child: Row(children: [
               SizedBox(width: 22, child: Text('${i + 1}', style: l.text(13, color: l.mute, lh: 18))),
-              Expanded(child: Line1(_nodeDisplay(app, n), l.text(14.5, lh: 20))),
+              Expanded(child: Tap(
+                onTap: () => app.send('select', {'route': id, 'node': n}).then((_) => app.refreshRouting()),
+                child: Padding(padding: const EdgeInsets.symmetric(vertical: 14), child: Line1(_nodeDisplay(app, n), l.text(14.5, lh: 20))),
+              )),
               _small('up', tr('上移', 'Move up'), i == 0 ? null : () => _moveOrder(g, i, -1)),
               _small('down', tr('下移', 'Move down'), i == order.length - 1 ? null : () => _moveOrder(g, i, 1)),
               _small('x', tr('移除', 'Remove'), () => app.routeOp('setOrder', {'id': id, 'order': [...order]..removeAt(i)})),

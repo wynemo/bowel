@@ -10,6 +10,7 @@ package i18n
 // something else by.
 
 var jaFlutter = map[string]string{
+	"点击选择节点，故障时按备用顺序自动切换。": "タップでノードを選び、接続できなくなったらバックアップ順に切り替えます。",
 	"不走 bowel 的 App": "bowel を通さないアプリ",
 	"排除列表：这些 App 直接联网，不经过 VPN":                                                "除外リスト：これらのアプリは VPN を通らず直接接続します",
 	"关掉的 App 不走 bowel，直接联网，规则也管不到它。改动在重新连接 VPN 后生效。":                          "オフにしたアプリは bowel を通らず直接接続し、ルールも適用されません。変更は VPN を再接続すると反映されます。",
@@ -231,7 +232,7 @@ var jaFlutter = map[string]string{
 	"现有的 {0} 个会恢复走 bowel": "今の {0} 個は bowel を通るように戻ります",
 	"用嗅探结果覆盖目标":           "スニッフィング結果で宛先を上書き",
 	"用链接或文件里的规则":          "リンクやファイルのルールを使う",
-	"留空用 bowel-android。已登录时改名会同步到 tailnet。":                               "空欄なら bowel-android。ログイン中に変更すると tailnet 上の名前も変わります。",
+	"留空用 bowel-android。已登录时改名会同步到 tailnet。": "空欄なら bowel-android。ログイン中に変更すると tailnet 上の名前も変わります。",
 	"登录": "ログイン",
 	"相机权限已关闭，请在系统设置中允许 bowel 使用相机": "カメラへのアクセスがオフです。システム設定で bowel にカメラの使用を許可してください",
 	"确认 bowel 可以建立 VPN 连接":         "bowel が VPN 接続を作成することを許可します",
@@ -313,6 +314,7 @@ var jaFlutter = map[string]string{
 }
 
 var hantFlutter = map[string]string{
+	"点击选择节点，故障时按备用顺序自动切换。": "點擊選擇節點，故障時按備援順序自動切換。",
 	"不走 bowel 的 App": "不走 bowel 的 App",
 	"排除列表：这些 App 直接联网，不经过 VPN":                                                "排除清單：這些 App 直接連網，不經過 VPN",
 	"关掉的 App 不走 bowel，直接联网，规则也管不到它。改动在重新连接 VPN 后生效。":                          "關掉的 App 不走 bowel，直接連網，規則也管不到它。改動在重新連線 VPN 後生效。",
@@ -534,7 +536,7 @@ var hantFlutter = map[string]string{
 	"现有的 {0} 个会恢复走 bowel": "現有的 {0} 個會恢復走 bowel",
 	"用嗅探结果覆盖目标":           "用嗅探結果覆寫目標",
 	"用链接或文件里的规则":          "使用連結或檔案裡的規則",
-	"留空用 bowel-android。已登录时改名会同步到 tailnet。":                               "留空用 bowel-android。已登入時改名會同步到 tailnet。",
+	"留空用 bowel-android。已登录时改名会同步到 tailnet。": "留空用 bowel-android。已登入時改名會同步到 tailnet。",
 	"登录": "登入",
 	"相机权限已关闭，请在系统设置中允许 bowel 使用相机": "相機權限已關閉，請在系統設定中允許 bowel 使用相機",
 	"确认 bowel 可以建立 VPN 连接":         "確認 bowel 可以建立 VPN 連線",

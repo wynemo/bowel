@@ -110,6 +110,24 @@ func wanted(r routes.Route) string {
 	return routes.Auto(r)
 }
 
+// selectFallback uses mihomo's manual fallback choice. It stays on the
+// chosen member until it fails; the configured backup order is unchanged.
+func (a *App) selectFallback(routeID, node string) error {
+	r := a.route(routeID)
+	_, orders := a.nodeLists(a.routes())
+	i := slices.Index(orders[routeID], node)
+	if i < 0 {
+		return fmt.Errorf(i18n.T("没有这个节点: %s", "No such node: %s"), node)
+	}
+	if err := a.coreCall(5*time.Second, func(ctx context.Context, c *mihomo.Client) error {
+		return c.Select(ctx, routes.Backup(r), routes.BackupStep(r, i))
+	}); err != nil {
+		return err
+	}
+	a.refresh()
+	return nil
+}
+
 // adoptSelections fills in the strategy of groups that have none, from
 // what the core remembers: routes from before strategies existed were
 // either on their automatic group or on a node the user picked.

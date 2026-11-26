@@ -275,7 +275,7 @@ func (x *bridge) selectMember(ctx context.Context, group, member string) error {
 	if !ok {
 		return errors.New(i18n.T("没有这个路由组", "No such route group"))
 	}
-	if core.GroupKind(g) != "select" {
+	if !core.GroupSelectable(g) {
 		return fmt.Errorf(i18n.T("「%s」的类型是 %s，由内核自己选择", "%s is of the kind %s: the core chooses by itself"), group, core.GroupKind(g))
 	}
 	if member == "" {
@@ -367,7 +367,7 @@ func (x *bridge) imported(s settings.Settings, im *core.Imported, all []routes.R
 	for _, g := range im.Groups {
 		gname := core.GroupName(g)
 		p := px[gname]
-		gv := importedGroup{Name: gname, Kind: core.GroupKind(g), Route: byName[gname], Rules: im.RulesTo(gname), Now: p.Now, Selectable: core.GroupKind(g) == "select", Members: []importedMember{}}
+		gv := importedGroup{Name: gname, Kind: core.GroupKind(g), Route: byName[gname], Rules: im.RulesTo(gname), Now: p.Now, Selectable: core.GroupSelectable(g), Members: []importedMember{}}
 		if leaf := leafOf(px, gname); p.Now != "" && leaf != "DIRECT" && leaf != "REJECT" && leaf != "REJECT-DROP" {
 			gv.Exit = x.listedNode(leaf, prov)
 		}

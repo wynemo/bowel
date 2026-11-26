@@ -448,6 +448,13 @@ func (im *Imported) GroupOf(name string) (map[string]any, bool) {
 func GroupName(g map[string]any) string { return nameOf(g) }
 func GroupKind(g map[string]any) string { return strings.ToLower(fmt.Sprint(g["type"])) }
 
+// GroupSelectable says which imported groups allow a manual member choice.
+// Fallback keeps that choice only while the member works.
+func GroupSelectable(g map[string]any) bool {
+	kind := GroupKind(g)
+	return kind == "select" || kind == "fallback"
+}
+
 // ProviderNames are the source's own node providers that are in use.
 func (im *Imported) ProviderNames() []string {
 	return slices.Sorted(maps.Keys(im.ProxyProviders))

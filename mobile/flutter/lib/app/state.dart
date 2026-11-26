@@ -274,11 +274,13 @@ class AppState extends ChangeNotifier {
 
   void pickNode(String routeId, String name) {
     final r = route(routeId);
-    if (r.node == name || pending != null) return;
+    if ((r.node == name && r.policy != 'order') || pending != null) return;
     _morph(() {
       r.node = name;
-      r.auto = false;
-      r.policy = 'fixed';
+      if (r.policy != 'order') {
+        r.auto = false;
+        r.policy = 'fixed';
+      }
       pending = 'node:$routeId';
     }, alias: {'exit-$routeId': 'pick-$name'});
     if (_live) _send('select', {'route': routeId, 'node': _coreNames[name] ?? name});

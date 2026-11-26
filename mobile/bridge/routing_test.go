@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/oboo/moho/internal/core"
 	"github.com/oboo/moho/internal/locate"
+	"github.com/oboo/moho/internal/mihomo"
 	"github.com/oboo/moho/internal/provider"
 	"github.com/oboo/moho/internal/routes"
 	"github.com/oboo/moho/internal/settings"
@@ -300,6 +303,52 @@ func TestPickDataHasProviderID(t *testing.T) {
 	n := x.routing().Nodes
 	if len(n) == 0 || n[0].ProviderID != id {
 		t.Fatalf("nodes = %+v, want provider %s", n, id)
+	}
+}
+
+func TestManualFallbackPick(t *testing.T) {
+	x := testBridge(t)
+	ctx := context.Background()
+	nodes := x.routing().Nodes
+	a, b := nodes[0].Name, nodes[1].Name
+	if err := x.change(ctx, func(s *settings.Settings) {
+		s.Routing.ChangePolicy("ai", func(q *routes.Policy) { q.Mode, q.Order = routes.ModeOrder, []string{a, b} })
+	}); err != nil {
+		t.Fatal(err)
+	}
+	old := x.set.Get()
+	type selection struct{ Group, Name string }
+	picked := make(chan selection, 4)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut {
+			var body struct {
+				Name string `json:"name"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			picked <- selection{r.URL.Path, body.Name}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(srv.Close)
+	x.client = mihomo.NewTCP(strings.TrimPrefix(srv.URL, "http://"), "")
+	if err := x.selectNode(ctx, "ai", b); err != nil {
+		t.Fatal(err)
+	}
+	if q := x.set.Get().Routing.Policy("ai"); q.Mode != routes.ModeOrder || !slices.Equal(q.Order, []string{a, b}) {
+		t.Fatalf("manual fallback: %+v", q)
+	}
+	if !coreSame(old, x.set.Get()) {
+		t.Fatal("a manual fallback choice must not reload the config")
+	}
+	r, _ := x.route("ai")
+	got := <-picked
+	if got.Group != "/proxies/"+routes.Backup(r) || got.Name != routes.BackupStep(r, 1) {
+		t.Fatalf("selection: %+v", got)
+	}
+	if len(picked) != 0 {
+		t.Fatal("unexpected config mutation")
 	}
 }
 

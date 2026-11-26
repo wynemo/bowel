@@ -1644,7 +1644,7 @@ func (u *UI) nodePicker(c *ui.Context, p *pal, rid string, w float32, lead func(
 			if r.Broken != "" {
 				note(i18n.T("排好的节点都不通。加入能用的节点，或换一种策略。", "None of these nodes work. Add one that does, or change strategy."), true)
 			} else {
-				note(i18n.T("一直用排在最前的；不通就用下一个，恢复后回到第 1 位（◆ 为当前）。", "Uses the first in line, the next if it's down, and returns to No. 1 when it recovers (◆ is current)."), false)
+				note(i18n.T("点击选择节点；不通时按备用顺序自动切换（◆ 为当前）。", "Click to choose a node; falls back in order if it fails (◆ is current)."), false)
 			}
 		default:
 			if r.Broken != "" {
@@ -1703,7 +1703,7 @@ func (u *UI) nodePicker(c *ui.Context, p *pal, rid string, w float32, lead func(
 				head = append(head, pick{n: NodeView{Name: name, Display: display(name)}, place: i + 1, gone: true})
 			}
 		}
-		list = append(append(head, pick{head: i18n.T("点击加入", "Click to add")}), list...)
+		list = append(append(head, pick{head: i18n.T("其他节点 · 点击选择", "Other nodes · click to choose")}), list...)
 	}
 	// With nothing to list, the same list holds the header and a line
 	// saying so: a different container would move the search field, which
@@ -1787,9 +1787,14 @@ func (u *UI) nodePicker(c *ui.Context, p *pal, rid string, w float32, lead func(
 			case picking:
 				name := n.Name
 				u.changePolicy(rid, func(q *routes.Policy) { q.Nodes = toggled(q.Nodes, name) })
-			case ordered:
-			case adding:
-				u.changePolicy(rid, func(q *routes.Policy) { q.Order = append(q.Order, n.Name) })
+			case byOrder:
+				if !item.gone {
+					u.changeRouting(func(s *settings.Settings) { s.Routing.PickNode(rid, n.Name) }, func() {
+						if err := u.app.selectFallback(rid, n.Name); err != nil {
+							u.toast(err.Error())
+						}
+					})
+				}
 			case !on || q.Mode != routes.ModeFixed:
 				u.do(func() error { return u.app.selectNode(rid, n.Name) })
 			}
@@ -1847,9 +1852,8 @@ func (u *UI) nodePicker(c *ui.Context, p *pal, rid string, w float32, lead func(
 			}
 			ui.Row(c).Width(nodeActW).Shrink(0).Gap(nodeActGap).Justify(ui.End).AlignItems(ui.Center).Children(func() {
 				if adding {
-					// ＋ stands where the rows above have ×, as wide as that button.
-					ui.Row(c).Size(32, 20).Shrink(0).Margin(0, -6, 0, 0).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
-						ui.Text(c, "＋").FontSize(12).TextColor(ink)
+					iconBtn(c.Key("add"), p, "＋", 12, i18n.T("加入备用", "Add to backups")).Margin(-6, -6, -6, 0).OnClick(func() {
+						u.changePolicy(rid, func(q *routes.Policy) { q.Order = append(q.Order, n.Name) })
 					})
 					return
 				}

@@ -74,6 +74,32 @@ func importedApp(t *testing.T) (*App, string, func(string)) {
 	}
 }
 
+func TestImportedFallbackManualPick(t *testing.T) {
+	a, id, serve := importedApp(t)
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	t.Cleanup(target.Close)
+	body := strings.Replace(issue33Sub, "type: url-test", "type: fallback", 1)
+	serve(strings.ReplaceAll(body, "http://127.0.0.1:9/", target.URL+"/"))
+	if err := a.updateProvider(context.Background(), id); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.setImportedRouting(id); err != nil {
+		t.Fatal(err)
+	}
+	a.refresh()
+	for _, g := range a.snapshot().Imported.Groups {
+		if g.Name == "Japan" && !g.Selectable {
+			t.Fatal("fallback isn't selectable")
+		}
+	}
+	if err := a.selectMember("Japan", "JP-02"); err != nil {
+		t.Fatal(err)
+	}
+	if got := coreProxies(t, a)["Japan"].Now; got != "JP-02" {
+		t.Fatalf("fallback chose %q", got)
+	}
+}
+
 func hasRoute(a *App, name string) bool {
 	return slices.ContainsFunc(a.routes(), func(r routes.Route) bool { return r.Name == name })
 }

@@ -322,7 +322,7 @@ func (u *UI) groupMembers(c *ui.Context, p *pal, g GroupView) {
 		if g.Selectable && b.Hovered() {
 			b.Background(p.hover)
 		}
-		if g.Selectable && !chosen {
+		if g.Selectable && (!chosen || g.Kind == "fallback") {
 			b.OnClick(func() {
 				if u.app != nil {
 					u.do(func() error { return u.app.selectMember(group, member) })

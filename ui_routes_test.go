@@ -337,7 +337,7 @@ func TestStrategyPicker(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Advance(100 * time.Millisecond)
-	if !hasTextPart(tt, "备用顺序 · 1") || !hasTextPart(tt, "点击加入") {
+	if !hasTextPart(tt, "备用顺序 · 1") || !hasTextPart(tt, "点击选择") {
 		t.Errorf("order: %q", tt.Texts())
 	}
 	if err := tt.Click(u.snap.Nodes[0].Display); err != nil {
@@ -356,6 +356,38 @@ func TestStrategyPicker(t *testing.T) {
 	if q := u.policy("ai"); q.Mode != routes.ModeFixed || len(q.Order) != 2 {
 		t.Errorf("after fixed: %+v", q)
 	}
+}
+
+// Clicking a backup selects it without leaving fallback; adding remains separate.
+func TestFallbackManualPick(t *testing.T) {
+	u := routesFixture()
+	u.selectGroup("ai")
+	u.routes.pol = true
+	a, b := u.snap.Nodes[0], u.snap.Nodes[1]
+	u.changePolicy("ai", func(q *routes.Policy) {
+		q.Mode, q.Order = routes.ModeOrder, []string{a.Name, b.Name}
+	})
+	tt := ui.NewTester(u.view, 1060, 900)
+	tt.Advance(time.Second)
+	for _, n := range []NodeView{b, a} {
+		if err := tt.Click(n.Display); err != nil {
+			t.Fatal(err)
+		}
+		tt.Advance(100 * time.Millisecond)
+		want := []string{a.Name, b.Name}
+		if q := u.policy("ai"); q.Mode != routes.ModeOrder || !slices.Equal(q.Order, want) {
+			t.Fatalf("picked %s: %+v", n.Name, q)
+		}
+	}
+	c := u.snap.Nodes[2]
+	if err := tt.Click(c.Display); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(100 * time.Millisecond)
+	if q := u.policy("ai"); q.Mode != routes.ModeOrder || !slices.Equal(q.Order, []string{a.Name, b.Name, c.Name}) {
+		t.Fatalf("picked outside list: %+v", q)
+	}
+	shot(t, tt, "fallback-manual-pick")
 }
 
 // TestStrategyRegionStripWidth: the region strip inside the Routes tab's
