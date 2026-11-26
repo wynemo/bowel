@@ -178,7 +178,10 @@ func TestInstallStepKeepsCurrentCopy(t *testing.T) {
 	if b, _ := os.ReadFile(step[1]); string(b) != "new" {
 		t.Errorf("copy = %q", b)
 	}
-	if step[len(step)-1] != dst {
+	// DNS authorization rules now follow the core's install commands.
+	// Check that the copy still lands at dst before those extra steps.
+	move := tool("mv") + " -f " + shellQuote(step[1]) + " " + shellQuote(dst)
+	if !strings.Contains(script([]Step{step}), move) {
 		t.Errorf("step = %v", step)
 	}
 }

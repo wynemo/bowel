@@ -180,8 +180,26 @@ func TestProtocol(t *testing.T) {
 // not answered.
 func TestCancel(t *testing.T) {
 	release := make(chan struct{})
-	c := start(t, testServer(release))
+	started := make(chan struct{}, 2)
+	srv := testServer(release)
+	for i := range srv.Tools {
+		if srv.Tools[i].Name == "wait" {
+			run := srv.Tools[i].Run
+			srv.Tools[i].Run = func(ctx context.Context, s *Session, raw json.RawMessage) (any, error) {
+				started <- struct{}{}
+				return run(ctx, s, raw)
+			}
+		}
+	}
+	c := start(t, srv)
 	c.send(map[string]any{"jsonrpc": "2.0", "id": "slow", "method": "tools/call", "params": map[string]any{"name": "wait"}})
+	// Cancellation exercises a running tool; a ping may finish before the
+	// goroutine for the slow call has even registered its cancellation.
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the slow tool did not start")
+	}
 	if r := c.call("ping", nil); r["error"] != nil {
 		t.Fatalf("ping behind a waiting call: %v", r)
 	}
