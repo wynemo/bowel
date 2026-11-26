@@ -290,7 +290,10 @@ func (u *UI) groupNowWord(g GroupView) string {
 
 func (u *UI) importedGroupDetail(c *ui.Context, p *pal, g GroupView) {
 	ui.Column(c).Gap(3).Padding(2, 0, 12, 0).Children(func() {
-		ui.Text(c, g.Name).FontSize(22).FontWeight(700).TextColor(p.ink).MaxLines(2)
+		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, g.Name).FontSize(22).FontWeight(700).TextColor(p.ink).MaxLines(2).Grow(1).Basis(0).MinWidth(0)
+			u.importedTestButton(c.Key("test"), p, g)
+		})
 		what := groupKindWord(g.Kind)
 		if g.Rules > 0 {
 			what += fmt.Sprintf(i18n.T(" · %d 条规则指向这里", " · %d rules point here"), g.Rules)
@@ -372,9 +375,25 @@ func (u *UI) groupPicker(c *ui.Context, p *pal, r RouteView) {
 		if !ok {
 			return
 		}
+		ui.Row(c).Justify(ui.End).Padding(2, 10, 8, 10).Children(func() {
+			u.importedTestButton(c.Key("test"), p, g)
+		})
 		if !g.Selectable {
 			ui.Text(c, fmt.Sprintf(i18n.T("这个组是「%s」，由内核自己选择", "This group is %s: the core chooses by itself"), groupKindWord(g.Kind))).FontSize(12).TextColor(p.mute).Padding(2, 10, 8, 10)
 		}
 		u.groupMembers(c, p, g)
+	})
+}
+
+func (u *UI) importedTestButton(c *ui.Context, p *pal, g GroupView) {
+	testing := u.pending("test-group:" + g.Name)
+	label := i18n.T("全部测速", "Test all")
+	if testing {
+		label = i18n.T("测速中…", "Testing…")
+	}
+	btn(c, p, label).Disabled(testing || len(g.Members) == 0).Shrink(0).OnClick(func() {
+		if u.app != nil {
+			u.do(func() error { return u.app.testImportedGroup(bg(), g.Name) })
+		}
 	})
 }

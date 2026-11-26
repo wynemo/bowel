@@ -18,6 +18,32 @@ func importedFixture() *UI {
 	return u
 }
 
+func TestImportedGroupManualTest(t *testing.T) {
+	for _, group := range []string{"Streaming", "Japan", "Hidden"} {
+		u := importedFixture()
+		u.page, u.routes.group = "routes", group
+		tt := ui.NewTester(u.view, 960, 760)
+		tt.Advance(time.Second)
+		if err := tt.Click("全部测速"); err != nil {
+			t.Fatal(err)
+		}
+		u.snap.Pending = []string{"test-group:" + group}
+		tt.Frame()
+		if !tt.HasText("测速中…") {
+			t.Fatalf("%s: no testing state: %q", group, tt.Texts())
+		}
+		if b, ok := tt.AccessByRole(ui.RoleButton, "测速中…"); !ok || !b.Disabled {
+			t.Fatal("testing button is still enabled")
+		}
+		shot(t, tt, "imported-testing-"+group)
+		u.snap.Pending = nil
+		tt.Frame()
+		if !tt.HasText("全部测速") {
+			t.Fatalf("%s: test button didn't return", group)
+		}
+	}
+}
+
 func TestImportedPageShowsTheGroups(t *testing.T) {
 	u := importedFixture()
 	u.page = "routes"

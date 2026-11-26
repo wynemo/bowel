@@ -78,6 +78,55 @@ func hasRoute(a *App, name string) bool {
 	return slices.ContainsFunc(a.routes(), func(r routes.Route) bool { return r.Name == name })
 }
 
+func TestImportedGroupTestsImmediately(t *testing.T) {
+	a, id, serve := importedApp(t)
+	h := &testHits{n: map[string]int{}, now: map[string]int{}, most: map[string]int{}}
+	srv := httptest.NewServer(http.HandlerFunc(h.serve))
+	t.Cleanup(srv.Close)
+	if err := a.updateSettings(func(s *settings.Settings) {
+		s.TestURL = srv.URL + "/fallback"
+		s.UnifiedDelay = false
+	}); err != nil {
+		t.Fatal(err)
+	}
+	body := strings.ReplaceAll(issue33Sub, "http://127.0.0.1:9/", srv.URL+"/group")
+	body = strings.Replace(body, "rules:\n", "  - name: Hidden\n    type: select\n    proxies: [JP-01, JP-02]\nrules:\n", 1)
+	serve(body)
+	ctx := context.Background()
+	if err := a.updateProvider(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.setImportedRouting(id); err != nil {
+		t.Fatal(err)
+	}
+	a.refresh()
+	h.settle(t)
+	for _, group := range []string{"Japan", "Japan", "Hidden"} {
+		h.mu.Lock()
+		before := h.n["/group"]
+		path := "/group"
+		if group == "Hidden" {
+			path, before = "/fallback", h.n["/fallback"]
+		}
+		h.mu.Unlock()
+		if err := a.testImportedGroup(ctx, group); err != nil {
+			t.Fatal(err)
+		}
+		h.mu.Lock()
+		got := h.n[path] - before
+		h.mu.Unlock()
+		if got != 2 {
+			t.Fatalf("%s: got %d new tests on %s, want 2 without waiting for the interval", group, got, path)
+		}
+		if a.busy("test-group:" + group) {
+			t.Fatal("group stayed busy after testing")
+		}
+	}
+	if err := a.testImportedGroup(ctx, "missing"); err == nil {
+		t.Fatal("testing an unknown group succeeded")
+	}
+}
+
 func TestImportedRoutingEndToEnd(t *testing.T) {
 	a, id, serve := importedApp(t)
 	ctx := context.Background()

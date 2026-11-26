@@ -21,6 +21,44 @@ func routesFixture() *UI {
 	return u
 }
 
+func TestStrategyCardTestsWithoutOpening(t *testing.T) {
+	for _, width := range []int{960, 1060} {
+		u := routesFixture()
+		u.selectGroup("ai")
+		tt := ui.NewTester(u.view, width, 760)
+		tt.Advance(time.Second)
+		if err := tt.Click("测速"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
+		if u.routes.pol {
+			t.Fatal("testing opened the strategy card")
+		}
+		u.snap.Pending = []string{"test:ai"}
+		tt.Frame()
+		if !tt.HasText("测速中…") {
+			t.Fatalf("no testing state: %q", tt.Texts())
+		}
+		if b, ok := tt.AccessByRole(ui.RoleButton, "测速中…"); !ok || !b.Disabled {
+			t.Fatal("testing button is still enabled")
+		}
+		shot(t, tt, fmt.Sprintf("strategy-testing-%d", width))
+		u.selectGroup("media")
+		tt.Frame()
+		tt.Advance(time.Second)
+		if tt.HasText("测速中…") || !tt.HasText("测速") {
+			t.Fatalf("another group's test disabled this group: %q", tt.Texts())
+		}
+		u.selectGroup("ai")
+		u.snap.Pending = nil
+		tt.Frame()
+		tt.Advance(time.Second)
+		if !tt.HasText("测速") {
+			t.Fatal("the test button didn't return")
+		}
+	}
+}
+
 func typeInto(t *testing.T, tt *ui.Tester, label, text string) {
 	t.Helper()
 	f, ok := tt.AccessByRole(ui.RoleTextField, label)

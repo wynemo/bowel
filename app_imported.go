@@ -23,6 +23,7 @@ import (
 	"github.com/oboo/moho/internal/provider"
 	"github.com/oboo/moho/internal/routes"
 	"github.com/oboo/moho/internal/settings"
+	"github.com/oboo/moho/internal/speed"
 )
 
 // importedCache is guarded by routesMu. Reading a config is not for every
@@ -379,6 +380,45 @@ func (a *App) selectMember(group, member string) error {
 		return err
 	}
 	a.refresh()
+	return nil
+}
+
+// testImportedGroup also supports groups no rule points at. Test the
+// members shown in the config, using its URL when one is specified.
+func (a *App) testImportedGroup(ctx context.Context, group string) error {
+	im := a.importedNow()
+	if im == nil {
+		return errors.New(i18n.T("没有这个路由组", "No such route group"))
+	}
+	g, ok := im.GroupOf(group)
+	if !ok {
+		return errors.New(i18n.T("没有这个路由组", "No such route group"))
+	}
+	if _, err := a.core.Client(); err != nil {
+		return err
+	}
+	done := a.begin("test-group:" + group)
+	defer done()
+	ctx, cancel := context.WithTimeout(ctx, testWait)
+	defer cancel()
+	url, _ := g["url"].(string)
+	if url == "" {
+		url = a.settings.Get().TestURL
+	}
+	a.mu.Lock()
+	members := slices.Clone(a.proxies[group].All)
+	a.mu.Unlock()
+	var targets []speed.Target
+	for _, m := range members {
+		if m != "REJECT" && m != "REJECT-DROP" {
+			targets = append(targets, speed.Target{Node: m, URL: url})
+		}
+	}
+	a.tests.Now(ctx, targets)
+	a.readTests()
+	if ctx.Err() != nil {
+		return errors.New(i18n.T("还没有测完，其余的结果会陆续出来", "Not all tested yet; the rest of the results will follow"))
+	}
 	return nil
 }
 

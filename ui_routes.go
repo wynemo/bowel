@@ -952,23 +952,28 @@ func (u *UI) strategyCard(c *ui.Context, p *pal, v RouteView) {
 	winChanged := winW != *lastWinW
 	*lastWinW = winW
 	pol.Children(func() {
-		b := ui.ButtonBase(c.Key("head")).Row().Gap(10).Padding(10, 14).AlignItems(ui.Center)
-		b.Label(i18n.T("节点策略", "Node strategy")).OnClick(func() {
-			st.pol = !st.pol
-			u.home.region, u.home.query, u.home.picking = "", "", ""
-		}).Children(func() {
-			ui.Text(c, i18n.T("节点策略", "Node strategy")).FontSize(12.5).FontWeight(600).TextColor(p.ink).NoWrap().Shrink(0)
-			ui.Text(c, u.policyWord(v)).FontSize(12.5).TextColor(p.ink2).NoWrap().Shrink(0).Margin(0, 0, 0, 4)
-			ui.Text(c, "→").FontSize(12).TextColor(p.faint).Shrink(0)
-			col := p.ink
-			if v.Broken != "" {
-				col = p.signal
+		ui.Row(c.Key("header")).AlignItems(ui.Center).Children(func() {
+			b := ui.ButtonBase(c.Key("head")).Row().Grow(1).Basis(0).MinWidth(0).Gap(10).Padding(10, 14).AlignItems(ui.Center)
+			b.Label(i18n.T("节点策略", "Node strategy")).OnClick(func() {
+				st.pol = !st.pol
+				u.home.region, u.home.query, u.home.picking = "", "", ""
+			}).Children(func() {
+				ui.Text(c, i18n.T("节点策略", "Node strategy")).FontSize(12.5).FontWeight(600).TextColor(p.ink).NoWrap().Shrink(0)
+				ui.Text(c, u.policyWord(v)).FontSize(12.5).TextColor(p.ink2).SingleLine().Shrink(1).MinWidth(0).Margin(0, 0, 0, 4)
+				ui.Text(c, "→").FontSize(12).TextColor(p.faint).Shrink(0)
+				col := p.ink
+				if v.Broken != "" {
+					col = p.signal
+				}
+				shimmer(ui.Text(c, u.exitWord(v)).FontSize(12.5).FontWeight(600).TextColor(col).SingleLine().Shrink(1).MinWidth(0), u.pending("node:"+v.ID), p)
+				ui.Spacer(c)
+				d, _, _ := u.delayWord(v)
+				ui.Text(c, d).FontSize(12).FontFeatures("tnum").TextColor(p.mute).NoWrap().Shrink(0)
+				chevron(c, p.mute, st.pol)
+			})
+			if !v.Direct && !v.Reject {
+				u.routeTestButton(c.Key("test"), p, v.ID, i18n.T("测速", "Test")).Margin(0, 14, 0, 0)
 			}
-			shimmer(ui.Text(c, u.exitWord(v)).FontSize(12.5).FontWeight(600).TextColor(col).SingleLine().Shrink(1).MinWidth(0), u.pending("node:"+v.ID), p)
-			ui.Spacer(c)
-			d, _, _ := u.delayWord(v)
-			ui.Text(c, d).FontSize(12).FontFeatures("tnum").TextColor(p.mute).NoWrap().Shrink(0)
-			chevron(c, p.mute, st.pol)
 		})
 		if st.pol {
 			ui.Row(c).Padding(2, 14, 10, 14).Children(func() { u.stratSeg(c, p, v.ID) })
@@ -983,6 +988,19 @@ func (u *UI) strategyCard(c *ui.Context, p *pal, v RouteView) {
 			picker.Children(func() {
 				u.nodePicker(c, p, v.ID, w, nil)
 			})
+		}
+	})
+}
+
+// routeTestButton is available even while the group's node list is closed.
+func (u *UI) routeTestButton(c *ui.Context, p *pal, rid, label string) ui.Element {
+	testing := u.pending("test:" + rid)
+	if testing {
+		label = i18n.T("测速中…", "Testing…")
+	}
+	return btn(c, p, label).Disabled(testing).Shrink(0).OnClick(func() {
+		if u.app != nil {
+			u.do(func() error { return u.app.testRoute(bg(), rid) })
 		}
 	})
 }

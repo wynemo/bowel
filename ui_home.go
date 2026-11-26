@@ -1606,8 +1606,7 @@ func (u *UI) nodePicker(c *ui.Context, p *pal, rid string, w float32, lead func(
 			}
 			ui.Spacer(c)
 			ui.SearchField(c.Key("q"), &h.query).Placeholder(i18n.T("搜索节点", "Search nodes")).Width(regionSearchW).Shrink(0)
-			b := btn(c, p, label).Disabled(testing).Shrink(0)
-			b.OnClick(func() { u.do(func() error { return u.app.testRoute(bg(), rid) }) })
+			u.routeTestButton(c.Key("test"), p, rid, label)
 			d := btn(c.Key("bandwidth"), p, bwLabel).Disabled(downloading || testing).Shrink(0).
 				Tooltip(i18n.T("经延迟最低的几个节点各下载一个测速文件，比较真实的下载速度；会用掉一些流量，开始前会先告诉你", "Download a test file through the few nodes with the lowest delay, to compare real download speeds. It uses some traffic; you're told how much before it starts"))
 			d.OnClick(func() {
